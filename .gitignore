@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+
+# Environment variables
+.env*
+
+# OS generated files
+.DS_Store
+
+# IDE files
+.vscode/
+
+# Logs
+*.log
+
+# TypeScript build info
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Project-specific ignores
+.gemini/
+versions/.gemini/
