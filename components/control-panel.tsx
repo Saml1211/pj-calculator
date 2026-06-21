@@ -1,16 +1,16 @@
 'use client';
 
 import { useAppStore } from '@/lib/store';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Lock, Unlock } from 'lucide-react';
-import { LockedParameter, ProjectionParameters } from '@/lib/types';
-
 import { HexColorPicker } from 'react-colorful';
+import type { LockedParameter, ProjectionParameters } from '@/lib/types';
 
 interface ParameterControlProps {
   label: string;
@@ -19,196 +19,271 @@ interface ParameterControlProps {
   min: number;
   max: number;
   step: number;
-  projectorId: string;
-  lockedParameter: keyof ProjectionParameters | null;
+  unit?: string;
+  lockedParameter: LockedParameter;
   onValueChange: (param: keyof ProjectionParameters, value: number) => void;
-  onLockChange: (param: keyof ProjectionParameters | null) => void;
+  onLockChange: (param: LockedParameter) => void;
 }
 
-const ParameterControl: React.FC<ParameterControlProps> = ({ label, value, param, min, max, step, projectorId, lockedParameter, onValueChange, onLockChange }) => {
+function ParameterControl({
+  label,
+  value,
+  param,
+  min,
+  max,
+  step,
+  unit,
+  lockedParameter,
+  onValueChange,
+  onLockChange,
+}: ParameterControlProps) {
   const isLocked = lockedParameter === param;
+
   return (
-    <div className="space-y-2">
+    <div className={cn('space-y-2', isLocked && 'opacity-50')}>
       <div className="flex items-center justify-between">
-        <Label>{label}</Label>
-        {onLockChange && (
-          <Button variant="ghost" size="icon" onClick={() => onLockChange(isLocked ? null : param)}>
-            {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-          </Button>
-        )}
+        <Label className="text-xs">{label}</Label>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => onLockChange(isLocked ? null : (param as LockedParameter))}
+        >
+          {isLocked ? (
+            <Lock className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <Unlock className="h-3.5 w-3.5" />
+          )}
+        </Button>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <Slider
           value={[value]}
-          onValueChange={([val]) => onValueChange(param, val)}
           min={min}
           max={max}
           step={step}
           disabled={isLocked}
+          onValueChange={([v]) => onValueChange(param, v)}
+          className="flex-1"
         />
         <Input
           type="number"
-          value={value}
-          onChange={(e) => onValueChange(param, parseFloat(e.target.value))}
-          className="w-24"
+          value={Number(value.toFixed(2))}
+          min={min}
+          max={max}
+          step={step}
           disabled={isLocked}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v)) onValueChange(param, v);
+          }}
+          className="w-20 h-8 text-xs"
         />
+        {unit && (
+          <span className="text-xs text-muted-foreground w-4">{unit}</span>
+        )}
       </div>
     </div>
   );
-};
-
-interface PositionControlProps {
-  label: string;
-  value: number;
-  axis: string;
-  onPositionChange: (axis: string, value: number) => void;
 }
 
-const PositionControl: React.FC<PositionControlProps> = ({ label, value, axis, onPositionChange }) => {
-  return (
-    <div className="flex items-center gap-2">
-      <Label className="w-8">{label}</Label>
-      <Input
-        type="number"
-        value={value}
-        onChange={(e) => onPositionChange(axis, parseFloat(e.target.value))}
-      />
-    </div>
-  );
+function radToDeg(rad: number): number {
+  return (rad * 180) / Math.PI;
+}
+
+function degToRad(deg: number): number {
+  return (deg * Math.PI) / 180;
 }
 
 export function ControlPanel() {
-  const selectedProjectorIds = useAppStore((state) => state.selectedProjectorIds);
-  const projectors = useAppStore((state) => state.projectors);
-  const { updateProjectorParameter, updateProjector } = useAppStore((state) => state.actions);
+  const projectors = useAppStore((s) => s.projectors);
+  const selectedProjectorIds = useAppStore((s) => s.selectedProjectorIds);
+  const actions = useAppStore((s) => s.actions);
 
-  const selectedProjector = projectors.find(p => p.id === selectedProjectorIds[0]);
+  const selectedProjector = projectors.find(
+    (p) => p.id === selectedProjectorIds[0]
+  );
 
   if (!selectedProjector) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Control Panel</CardTitle>
+          <CardTitle className="text-sm font-medium">Parameters</CardTitle>
         </CardHeader>
         <CardContent>
-          <p>Select a projector to see its controls.</p>
+          <p className="text-sm text-muted-foreground">
+            Select a projector to edit parameters
+          </p>
         </CardContent>
       </Card>
     );
   }
 
-  const handleParameterChange = (param: keyof ProjectionParameters, value: any) => {
-    updateProjectorParameter(selectedProjector.id, param, value);
+  const params = selectedProjector.parameters;
+
+  const updateParam = (param: keyof ProjectionParameters, value: number) => {
+    actions.updateProjectorParameter(selectedProjector.id, param, value);
   };
 
-  const handleLockChange = (param: keyof ProjectionParameters | null) => {
-    updateProjector(selectedProjector.id, { parameters: { ...selectedProjector.parameters, lockedParameter: param as LockedParameter } });
+  const updateLock = (param: LockedParameter) => {
+    actions.updateProjector(selectedProjector.id, {
+      parameters: { ...params, lockedParameter: param },
+    });
   };
-
-  const handlePositionChange = (axis: string, value: number) => {
-    const newPosition = { ...selectedProjector.parameters.position, [axis]: value };
-    updateProjector(selectedProjector.id, { parameters: { ...selectedProjector.parameters, position: newPosition } });
-  };
-
-  const handleRotationChange = (axis: string, value: number) => {
-    const newRotation = { ...selectedProjector.parameters.rotation, [axis]: value };
-    updateProjector(selectedProjector.id, { parameters: { ...selectedProjector.parameters, rotation: newRotation } });
-  };
-
-  const { parameters } = selectedProjector;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Control Panel: {selectedProjector.name}</CardTitle>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium">
+          Parameters{' '}
+          <span className="text-muted-foreground font-normal">
+            — {selectedProjector.name}
+          </span>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="basic">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Basic</TabsTrigger>
-            <TabsTrigger value="advanced">Advanced</TabsTrigger>
-            <TabsTrigger value="position">Position</TabsTrigger>
+        <Tabs defaultValue="optics">
+          <TabsList className="w-full">
+            <TabsTrigger value="optics" className="flex-1">
+              Optics
+            </TabsTrigger>
+            <TabsTrigger value="layout" className="flex-1">
+              Layout
+            </TabsTrigger>
+            <TabsTrigger value="style" className="flex-1">
+              Style
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="basic" className="space-y-4 pt-4">
+
+          <TabsContent value="optics" className="space-y-4 mt-4">
             <ParameterControl
-              label="Throw Distance (m)"
-              value={parameters.throwDistance}
+              label="Throw Distance"
+              value={params.throwDistance}
               param="throwDistance"
               min={0.3}
               max={20}
               step={0.1}
-              projectorId={selectedProjector.id}
-              lockedParameter={parameters.lockedParameter}
-              onValueChange={handleParameterChange}
-              onLockChange={handleLockChange}
+              unit="m"
+              lockedParameter={params.lockedParameter}
+              onValueChange={updateParam}
+              onLockChange={updateLock}
             />
             <ParameterControl
-              label="Image Width (m)"
-              value={parameters.imageWidth}
+              label="Image Width"
+              value={params.imageWidth}
               param="imageWidth"
               min={0.5}
               max={10}
               step={0.1}
-              projectorId={selectedProjector.id}
-              lockedParameter={parameters.lockedParameter}
-              onValueChange={handleParameterChange}
-              onLockChange={handleLockChange}
+              unit="m"
+              lockedParameter={params.lockedParameter}
+              onValueChange={updateParam}
+              onLockChange={updateLock}
             />
             <ParameterControl
               label="Throw Ratio"
-              value={parameters.throwRatio}
+              value={params.throwRatio}
               param="throwRatio"
               min={0.3}
               max={7.5}
-              step={0.1}
-              projectorId={selectedProjector.id}
-              lockedParameter={parameters.lockedParameter}
-              onValueChange={handleParameterChange}
-              onLockChange={handleLockChange}
+              step={0.05}
+              lockedParameter={params.lockedParameter}
+              onValueChange={updateParam}
+              onLockChange={updateLock}
             />
+            <div className="text-xs text-muted-foreground pt-1">
+              Image Height: {params.imageHeight.toFixed(2)} m
+            </div>
           </TabsContent>
-          <TabsContent value="advanced" className="space-y-4 pt-4">
-            <ParameterControl
-              label="Aspect Ratio"
-              value={parameters.aspectRatio}
-              param="aspectRatio"
-              min={0.5}
-              max={3}
-              step={0.01}
-              projectorId={selectedProjector.id}
-              lockedParameter={parameters.lockedParameter}
-              onValueChange={handleParameterChange}
-              onLockChange={handleLockChange}
-            />
+
+          <TabsContent value="layout" className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label>Color</Label>
-              <HexColorPicker color={selectedProjector.color} onChange={(color) => updateProjector(selectedProjector.id, { color })} />
+              <Label className="text-xs">Position</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['x', 'y', 'z'] as const).map((axis) => (
+                  <div key={axis} className="space-y-1">
+                    <span className="text-xs text-muted-foreground uppercase">
+                      {axis}
+                    </span>
+                    <Input
+                      type="number"
+                      step={0.1}
+                      value={Number(params.position[axis].toFixed(2))}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if (!isNaN(v)) {
+                          actions.updateProjector(selectedProjector.id, {
+                            parameters: {
+                              ...params,
+                              position: { ...params.position, [axis]: v },
+                            },
+                          });
+                        }
+                      }}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input
-                value={selectedProjector.name}
-                onChange={(e) => updateProjector(selectedProjector.id, { name: e.target.value })}
+              <Label className="text-xs">Rotation (degrees)</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['x', 'y', 'z'] as const).map((axis) => (
+                  <div key={axis} className="space-y-1">
+                    <span className="text-xs text-muted-foreground uppercase">
+                      {axis}
+                    </span>
+                    <Input
+                      type="number"
+                      step={1}
+                      value={Number(
+                        radToDeg(params.rotation[axis]).toFixed(1)
+                      )}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if (!isNaN(v)) {
+                          actions.updateProjector(selectedProjector.id, {
+                            parameters: {
+                              ...params,
+                              rotation: {
+                                ...params.rotation,
+                                [axis]: degToRad(v),
+                              },
+                            },
+                          });
+                        }
+                      }}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="style" className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label className="text-xs">Color</Label>
+              <HexColorPicker
+                color={selectedProjector.color}
+                onChange={(color) =>
+                  actions.updateProjector(selectedProjector.id, { color })
+                }
+                style={{ width: '100%' }}
               />
             </div>
-          </TabsContent>
-          <TabsContent value="position" className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label>Position (m)</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <PositionControl label="X" value={parameters.position.x} axis="x" onPositionChange={handlePositionChange} />
-                <PositionControl label="Y" value={parameters.position.y} axis="y" onPositionChange={handlePositionChange} />
-                <PositionControl label="Z" value={parameters.position.z} axis="z" onPositionChange={handlePositionChange} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Rotation (rad)</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <PositionControl label="X" value={parameters.rotation.x} axis="x" onPositionChange={handleRotationChange} />
-                <PositionControl label="Y" value={parameters.rotation.y} axis="y" onPositionChange={handleRotationChange} />
-                <PositionControl label="Z" value={parameters.rotation.z} axis="z" onPositionChange={handleRotationChange} />
-              </div>
+              <Label className="text-xs">Name</Label>
+              <Input
+                value={selectedProjector.name}
+                onChange={(e) =>
+                  actions.updateProjector(selectedProjector.id, {
+                    name: e.target.value,
+                  })
+                }
+                className="h-8 text-xs"
+              />
             </div>
           </TabsContent>
         </Tabs>

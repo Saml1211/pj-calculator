@@ -73,6 +73,7 @@ export interface AppState {
   isLinkedMode: boolean;
   surfaceConfig: SurfaceConfig;
   edgeBlendingConfig: EdgeBlendingConfig;
+  customModelUrl: string | null;
   actions: AppActions;
 }
 
@@ -90,4 +91,5 @@ export interface AppActions {
   setSurfaceConfig: (newConfig: Partial<SurfaceConfig>) => void;
   setEdgeBlendingConfig: (newConfig: Partial<EdgeBlendingConfig>) => void;
   adaptProjectorsToSurface: () => void;
+  setCustomModelUrl: (url: string | null) => void;
 }

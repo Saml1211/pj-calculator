@@ -1,4 +1,4 @@
-import { ProjectionParameters, SurfaceConfig } from './types';
+import { ProjectionParameters, ProjectorConfig, SurfaceConfig } from './types';
 import * as THREE from 'three';
 
 /**
@@ -69,9 +69,12 @@ export function calculateLinkedParameters(
 }
 
 /**
- * Calculates the optimal position and rotation for a projector to align with a curved surface.
- * This function will be fully implemented in a later step. For now, define the signature
- * and a basic implementation for flat surfaces.
+ * Calculates the optimal position and rotation for a projector to align with a
+ * projection surface. Supports flat, cylindrical, and spherical surfaces.
+ *
+ * The projector is placed at `throwDistance` from the surface, positioned along
+ * the surface's width based on `horizontalOffset`, and oriented to face the
+ * surface center (or arc normal for curved surfaces).
  *
  * @param surface The configuration of the projection surface.
  * @param projectorParams The parameters of the projector being positioned.
@@ -83,16 +86,118 @@ export function calculateProjectorWrapAround(
   projectorParams: ProjectionParameters,
   horizontalOffset: number = 0
 ): { position: THREE.Vector3; rotation: THREE.Euler } {
-  const position = new THREE.Vector3(
+  const { throwDistance } = projectorParams;
+  const surfaceCenter = new THREE.Vector3(
     surface.position.x,
     surface.position.y,
-    surface.position.z + projectorParams.throwDistance
+    surface.position.z
   );
-  const rotation = new THREE.Euler(0, Math.PI, 0); // Pointing towards -Z
 
-  // Placeholder for future curved surface logic
-  // if (surface.type === 'Cylindrical') {... }
-  // if (surface.type === 'Spherical') {... }
+  switch (surface.type) {
+    case 'Cylindrical': {
+      // The curvature parameter (0.001–1.0) maps to a total arc angle.
+      // At curvature=1 the arc spans 2*PI (full cylinder); at 0.001 nearly flat.
+      const totalAngle = surface.curvature * Math.PI * 2;
+      // Angle for this projector along the arc.
+      const angle = horizontalOffset * totalAngle;
+      // Radius of the cylinder: the surface curves outward from its center plane.
+      const radius = surface.width / (2 * totalAngle);
 
-  return { position, rotation };
+      // Position on the arc at `throwDistance` behind the surface curve.
+      const arcX = surfaceCenter.x + Math.sin(angle) * (radius + throwDistance);
+      const arcZ = surfaceCenter.z - Math.cos(angle) * (radius + throwDistance);
+      const position = new THREE.Vector3(arcX, surfaceCenter.y, arcZ);
+
+      // Rotation: face toward the surface center along the arc normal.
+      const lookTarget = new THREE.Vector3(
+        surfaceCenter.x + Math.sin(angle) * radius,
+        surfaceCenter.y,
+        surfaceCenter.z - Math.cos(angle) * radius
+      );
+      const rotationEuler = new THREE.Euler();
+      const m = new THREE.Matrix4().lookAt(position, lookTarget, new THREE.Vector3(0, 1, 0));
+      const q = new THREE.Quaternion().setFromRotationMatrix(m);
+      rotationEuler.setFromQuaternion(q);
+
+      return { position, rotation: rotationEuler };
+    }
+
+    case 'Spherical': {
+      // Spherical surface: projectors sit on a hemisphere at throwDistance from the surface.
+      // Use curvature to control how much of the sphere is covered.
+      const maxPhi = surface.curvature * Math.PI * 0.5; // half-sphere max
+      const phi = horizontalOffset * maxPhi; // horizontal angle
+      const theta = 0; // vertical center — could be parameterised later
+      const sphereRadius = surface.width / (2 * Math.PI * surface.curvature);
+
+      const dist = sphereRadius + throwDistance;
+      const sphX = surfaceCenter.x + Math.sin(phi) * Math.cos(theta) * dist;
+      const sphY = surfaceCenter.y + Math.sin(theta) * dist;
+      const sphZ = surfaceCenter.z - Math.cos(phi) * Math.cos(theta) * dist;
+      const position = new THREE.Vector3(sphX, sphY, sphZ);
+
+      // Look target: the corresponding point on the sphere surface.
+      const surfPoint = new THREE.Vector3(
+        surfaceCenter.x + Math.sin(phi) * Math.cos(theta) * sphereRadius,
+        surfaceCenter.y + Math.sin(theta) * sphereRadius,
+        surfaceCenter.z - Math.cos(phi) * Math.cos(theta) * sphereRadius
+      );
+      const rotationEuler = new THREE.Euler();
+      const m = new THREE.Matrix4().lookAt(position, surfPoint, new THREE.Vector3(0, 1, 0));
+      const q = new THREE.Quaternion().setFromRotationMatrix(m);
+      rotationEuler.setFromQuaternion(q);
+
+      return { position, rotation: rotationEuler };
+    }
+
+    case 'Flat':
+    default: {
+      // Flat surface: projectors sit at a uniform distance behind the surface,
+      // evenly spread along the X axis.
+      const x = surfaceCenter.x + horizontalOffset * surface.width;
+      const position = new THREE.Vector3(x, surfaceCenter.y, surfaceCenter.z + throwDistance);
+      // Default Three.js forward is -Z. The projector is at +Z looking toward -Z.
+      const rotation = new THREE.Euler(0, 0, 0);
+
+      return { position, rotation };
+    }
+  }
+}
+
+/**
+ * Distributes a set of projectors evenly across the projection surface.
+ * Each projector is placed at an equal horizontal offset from -0.5 (left edge)
+ * to +0.5 (right edge), oriented to face the surface.
+ *
+ * @param surface The projection surface configuration.
+ * @param projectors The array of projector configurations.
+ * @returns A new array of ProjectorConfig with updated position/rotation parameters.
+ */
+export function adaptProjectorsToSurface(
+  surface: SurfaceConfig,
+  projectors: ProjectorConfig[]
+): ProjectorConfig[] {
+  const count = projectors.length;
+  if (count === 0) return projectors;
+
+  return projectors.map((projector, index) => {
+    // Distribute evenly from -0.5 (left) to +0.5 (right).
+    // For a single projector, offset = 0 (centered).
+    const horizontalOffset = count > 1 ? index / (count - 1) - 0.5 : 0;
+
+    const { position, rotation } = calculateProjectorWrapAround(
+      surface,
+      projector.parameters,
+      horizontalOffset
+    );
+
+    return {
+      ...projector,
+      parameters: {
+        ...projector.parameters,
+        position: { x: position.x, y: position.y, z: position.z },
+        rotation: { x: rotation.x, y: rotation.y, z: rotation.z },
+      },
+    };
+  });
 }

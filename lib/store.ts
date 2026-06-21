@@ -1,16 +1,17 @@
 import { create } from 'zustand';
 import { AppState, ProjectorConfig, ProjectionParameters } from './types';
-import { calculateLinkedParameters, calculateProjectorWrapAround } from './calculations';
+import { calculateLinkedParameters, adaptProjectorsToSurface } from './calculations';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from './logger';
 
 const initialProjectorParams: ProjectionParameters = {
-  throwDistance: 3,
+  throwDistance: 5,
   imageWidth: 2,
   imageHeight: 2 / (16 / 9),
-  throwRatio: 1.5,
+  throwRatio: 2.5,
   aspectRatio: 16 / 9,
-  position: { x: 0, y: 1.5, z: 3 },
-  rotation: { x: 0, y: Math.PI, z: 0 },
+  position: { x: 0, y: 1.5, z: 5 },
+  rotation: { x: 0, y: 0, z: 0 },
   lockedParameter: 'throwRatio',
 };
 
@@ -25,9 +26,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       isVisible: true,
       parameters: initialProjectorParams,
     },
+    {
+      id: uuidv4(),
+      name: 'Projector 2',
+      color: projectorColors[1],
+      isVisible: true,
+      parameters: {
+        ...initialProjectorParams,
+        position: { x: -1.5, y: 1.5, z: 5 },
+      },
+    },
   ],
   selectedProjectorIds: [],
   isLinkedMode: false,
+  customModelUrl: null,
   surfaceConfig: {
     type: 'Flat',
     width: 5,
@@ -92,8 +104,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         edgeBlendingConfig: { ...state.edgeBlendingConfig, ...newConfig },
       })),
     adaptProjectorsToSurface: () => {
-      // This will be implemented fully in Section 6
-      console.log("Adapting projectors to surface...");
+      const { surfaceConfig, projectors } = get();
+      logger.info('Adapting projectors to surface', {
+        surfaceType: surfaceConfig.type,
+        projectorCount: projectors.length,
+      });
+      const updated = adaptProjectorsToSurface(surfaceConfig, projectors);
+      set({ projectors: updated });
     },
+    setCustomModelUrl: (url) => set({ customModelUrl: url }),
   },
 }));
