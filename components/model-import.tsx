@@ -21,8 +21,13 @@ export function ModelImport() {
     actions.setCustomModelUrl(url);
   };
 
+  const handleLoadSample = () => {
+    setFileName('sample-cube.glb');
+    actions.setCustomModelUrl('/sample-cube.glb');
+  };
+
   const handleRemove = () => {
-    if (customModelUrl) {
+    if (customModelUrl && customModelUrl.startsWith('blob:')) {
       URL.revokeObjectURL(customModelUrl);
     }
     setFileName(null);
@@ -55,6 +60,14 @@ export function ModelImport() {
             />
             <Button size="sm" className="w-full" onClick={handleLoad}>
               Load Model
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleLoadSample}
+            >
+              Load sample cube
             </Button>
           </div>
         ) : (

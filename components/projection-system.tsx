@@ -8,10 +8,12 @@ import { useAppStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { ProjectionCone } from './projection-cone';
 import { ProjectionSurface } from './projection-surface';
+import { CustomModel } from './custom-model';
 
 export function ProjectionSystem() {
   const projectors = useAppStore((s) => s.projectors);
   const surfaceConfig = useAppStore((s) => s.surfaceConfig);
+  const customModelUrl = useAppStore((s) => s.customModelUrl);
 
   return (
     <Canvas
@@ -56,6 +58,8 @@ export function ProjectionSystem() {
         ))}
 
         <ProjectionSurface surface={surfaceConfig} />
+
+        {customModelUrl && <CustomModel key={customModelUrl} url={customModelUrl} />}
       </Suspense>
     </Canvas>
   );
