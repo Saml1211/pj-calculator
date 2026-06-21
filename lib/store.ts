@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppState, ProjectorConfig, ProjectionParameters } from './types';
 import { calculateLinkedParameters, adaptProjectorsToSurface } from './calculations';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,7 +18,9 @@ const initialProjectorParams: ProjectionParameters = {
 
 const projectorColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
   projectors: [
     {
       id: uuidv4(),
@@ -114,4 +117,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
     setCustomModelUrl: (url) => set({ customModelUrl: url }),
   },
-}));
+}),
+    {
+      name: 'pj-calculator-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      // Persist only serializable scene config. `actions` are functions and
+      // `customModelUrl` is a transient object URL (revoked on reload), so both
+      // are excluded.
+      partialize: (state) => ({
+        projectors: state.projectors,
+        selectedProjectorIds: state.selectedProjectorIds,
+        isLinkedMode: state.isLinkedMode,
+        surfaceConfig: state.surfaceConfig,
+        edgeBlendingConfig: state.edgeBlendingConfig,
+      }),
+    }
+  )
+);
