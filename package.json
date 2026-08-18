@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check:edge-blend": "node scripts/check-edge-blend-report.mjs",
     "start": "next start",
     "lint": "next lint"
   },

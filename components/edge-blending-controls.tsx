@@ -6,10 +6,13 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { calculateEdgeBlendReport } from '@/lib/calculations';
 
 export function EdgeBlendingControls() {
+  const projectors = useAppStore((s) => s.projectors);
   const edgeBlendingConfig = useAppStore((s) => s.edgeBlendingConfig);
   const actions = useAppStore((s) => s.actions);
+  const report = calculateEdgeBlendReport(projectors, edgeBlendingConfig);
 
   return (
     <Card>
@@ -105,6 +108,34 @@ export function EdgeBlendingControls() {
                   actions.setEdgeBlendingConfig({ showRegions: checked })
                 }
               />
+            </div>
+
+            <div className="rounded-md border border-border bg-background/60 p-3 text-xs">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-medium">Blend receipt</span>
+                <span className={report.ok ? 'text-emerald-400' : 'text-amber-400'}>
+                  {report.ok ? 'Ready' : 'Needs adjustment'}
+                </span>
+              </div>
+              <div className="mb-2 text-muted-foreground">
+                Coverage {report.coverageWidthM.toFixed(2)} m · target {report.targetOverlapPercent}% · feather {report.targetFeatherPercent}%
+              </div>
+              <div className="space-y-2">
+                {report.pairs.map((pair) => (
+                  <div key={`${pair.leftProjectorId}-${pair.rightProjectorId}`} className="rounded bg-muted/40 p-2">
+                    <div className="font-medium">
+                      {pair.leftProjectorName} → {pair.rightProjectorName}: {pair.status.replace('_', ' ')}
+                    </div>
+                    <div className="text-muted-foreground">
+                      actual {pair.actualOverlapM.toFixed(2)} m / target {pair.desiredOverlapM.toFixed(2)} m; feather {pair.featherWidthM.toFixed(2)} m
+                    </div>
+                    <div className="mt-1 text-muted-foreground">{pair.recommendation}</div>
+                  </div>
+                ))}
+                {report.warnings.map((warning) => (
+                  <div key={warning} className="text-muted-foreground">{warning}</div>
+                ))}
+              </div>
             </div>
           </>
         )}

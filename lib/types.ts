@@ -64,6 +64,30 @@ export interface EdgeBlendingConfig {
   showRegions: boolean;   // Toggles the visibility of the blend zone visual overlay
 }
 
+export type EdgeBlendPairStatus = 'matched' | 'too_narrow' | 'too_wide';
+
+export interface EdgeBlendPairReport {
+  leftProjectorId: string;
+  leftProjectorName: string;
+  rightProjectorId: string;
+  rightProjectorName: string;
+  desiredOverlapM: number;
+  actualOverlapM: number;
+  deltaM: number;
+  featherWidthM: number;
+  status: EdgeBlendPairStatus;
+  recommendation: string;
+}
+
+export interface EdgeBlendReport {
+  ok: boolean;
+  coverageWidthM: number;
+  targetOverlapPercent: number;
+  targetFeatherPercent: number;
+  pairs: EdgeBlendPairReport[];
+  warnings: string[];
+}
+
 /**
  * Defines the shape of the global application state managed by Zustand.
  */

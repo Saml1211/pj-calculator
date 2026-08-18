@@ -1,5 +1,9 @@
-import { ProjectionParameters, ProjectorConfig, SurfaceConfig } from './types';
+import type { EdgeBlendingConfig, EdgeBlendPairStatus, EdgeBlendReport, ProjectionParameters, ProjectorConfig, SurfaceConfig } from './types';
 import * as THREE from 'three';
+
+function roundMetres(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
 
 /**
  * Recalculates dependent projection parameters based on which parameter is locked.
@@ -200,4 +204,73 @@ export function adaptProjectorsToSurface(
       },
     };
   });
+}
+
+export function calculateEdgeBlendReport(
+  projectors: ProjectorConfig[],
+  edgeBlending: EdgeBlendingConfig
+): EdgeBlendReport {
+  const visibleProjectors = projectors
+    .filter((projector) => projector.isVisible)
+    .sort((a, b) => a.parameters.position.x - b.parameters.position.x);
+
+  const extents = visibleProjectors.map((projector) => {
+    const halfWidth = projector.parameters.imageWidth / 2;
+    return {
+      projector,
+      left: projector.parameters.position.x - halfWidth,
+      right: projector.parameters.position.x + halfWidth,
+    };
+  });
+
+  const coverageWidthM = extents.length
+    ? Math.max(...extents.map((extent) => extent.right)) - Math.min(...extents.map((extent) => extent.left))
+    : 0;
+
+  const warnings: string[] = [];
+  if (!edgeBlending.isEnabled) {
+    warnings.push('Edge blending is disabled; report is a geometry preview only.');
+  }
+  if (visibleProjectors.length < 2) {
+    warnings.push('At least two visible projectors are required to validate a blend seam.');
+  }
+
+  const pairs = extents.slice(0, -1).map((leftExtent, index) => {
+    const rightExtent = extents[index + 1];
+    const desiredOverlap = Math.min(
+      leftExtent.projector.parameters.imageWidth,
+      rightExtent.projector.parameters.imageWidth
+    ) * (edgeBlending.overlap / 100);
+    const actualOverlap = Math.max(0, leftExtent.right - rightExtent.left);
+    const delta = actualOverlap - desiredOverlap;
+    const tolerance = Math.max(0.05, desiredOverlap * 0.1);
+    const status: EdgeBlendPairStatus = delta < -tolerance ? 'too_narrow' : delta > tolerance ? 'too_wide' : 'matched';
+    const recommendation = status === 'matched'
+      ? 'Within tolerance; keep this seam.'
+      : status === 'too_narrow'
+        ? `Move projectors ${roundMetres(Math.abs(delta))} m closer or reduce image width.`
+        : `Move projectors ${roundMetres(delta)} m apart or reduce overlap.`;
+
+    return {
+      leftProjectorId: leftExtent.projector.id,
+      leftProjectorName: leftExtent.projector.name,
+      rightProjectorId: rightExtent.projector.id,
+      rightProjectorName: rightExtent.projector.name,
+      desiredOverlapM: roundMetres(desiredOverlap),
+      actualOverlapM: roundMetres(actualOverlap),
+      deltaM: roundMetres(delta),
+      featherWidthM: roundMetres(actualOverlap * (edgeBlending.feather / 100)),
+      status,
+      recommendation,
+    };
+  });
+
+  return {
+    ok: edgeBlending.isEnabled && pairs.length > 0 && pairs.every((pair) => pair.status === 'matched'),
+    coverageWidthM: roundMetres(coverageWidthM),
+    targetOverlapPercent: edgeBlending.overlap,
+    targetFeatherPercent: edgeBlending.feather,
+    pairs,
+    warnings,
+  };
 }
