@@ -241,8 +241,12 @@ export function calculateEdgeBlendReport(
       leftExtent.projector.parameters.imageWidth,
       rightExtent.projector.parameters.imageWidth
     ) * (edgeBlending.overlap / 100);
-    const actualOverlap = Math.max(0, leftExtent.right - rightExtent.left);
-    const delta = actualOverlap - desiredOverlap;
+    // Signed: negative when the two images do not touch, and its magnitude is
+    // then the width of the hole in the wall. Clamping this to zero before the
+    // delta hides the gap and under-reports the move by exactly that width.
+    const signedOverlap = leftExtent.right - rightExtent.left;
+    const actualOverlap = Math.max(0, signedOverlap);
+    const delta = signedOverlap - desiredOverlap;
     const tolerance = Math.max(0.05, desiredOverlap * 0.1);
     const status: EdgeBlendPairStatus = delta < -tolerance ? 'too_narrow' : delta > tolerance ? 'too_wide' : 'matched';
     const recommendation = status === 'matched'

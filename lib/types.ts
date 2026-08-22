@@ -72,8 +72,8 @@ export interface EdgeBlendPairReport {
   rightProjectorId: string;
   rightProjectorName: string;
   desiredOverlapM: number;
-  actualOverlapM: number;
-  deltaM: number;
+  actualOverlapM: number;   // Never negative; separated images read as 0 overlap
+  deltaM: number;           // Signed distance to correct by; counts any gap between the images
   featherWidthM: number;
   status: EdgeBlendPairStatus;
   recommendation: string;
