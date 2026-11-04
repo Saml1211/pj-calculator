@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { SurfaceConfig } from '@/lib/types';
 
@@ -11,43 +11,82 @@ interface ProjectionSurfaceProps {
 export function ProjectionSurface({ surface }: ProjectionSurfaceProps) {
   const { type, width, height, curvature, segments, position, rotation } = surface;
 
-  const geometry = useMemo(() => {
+  const { geometry, zOffset } = useMemo(() => {
+    let geo: THREE.BufferGeometry;
+    let z = 0;
+
     switch (type) {
-      case 'Cylindrical':
-        const radiusCyl = width / (2 * Math.PI * curvature);
+      case 'Flat': {
+        geo = new THREE.PlaneGeometry(width, height, segments, segments);
+        break;
+      }
+      case 'Cylindrical': {
+        const radius = width / (2 * Math.PI * curvature);
         const thetaLength = 2 * Math.PI * curvature;
-        return new THREE.CylinderGeometry(radiusCyl, radiusCyl, height, segments, 1, true, -thetaLength / 2, thetaLength);
-      case 'Spherical':
-        const radiusSph = Math.max(width, height) / (Math.PI * curvature);
-        const phiLength = Math.PI * curvature; // Vertical curve
-        const thetaLengthSph = Math.PI * curvature; // Horizontal curve
-        return new THREE.SphereGeometry(radiusSph, segments, Math.round(segments / 2), -thetaLengthSph / 2, thetaLengthSph, 0, phiLength);
-      case 'Flat':
-      default:
-        return new THREE.PlaneGeometry(width, height, segments, segments);
+        geo = new THREE.CylinderGeometry(
+          radius,
+          radius,
+          height,
+          segments,
+          1,
+          true,
+          -thetaLength / 2,
+          thetaLength
+        );
+        geo.rotateX(Math.PI / 2);
+        z = -radius;
+        break;
+      }
+      case 'Spherical': {
+        const radius = Math.max(width, height) / (Math.PI * curvature);
+        const phiLength = Math.PI * curvature;
+        const thetaLength = Math.PI * curvature;
+        geo = new THREE.SphereGeometry(
+          radius,
+          segments,
+          Math.max(1, Math.floor(segments / 2)),
+          -thetaLength / 2,
+          thetaLength,
+          0,
+          phiLength
+        );
+        z = -radius;
+        break;
+      }
+      default: {
+        geo = new THREE.PlaneGeometry(width, height, segments, segments);
+      }
     }
+
+    return { geometry: geo, zOffset: z };
   }, [type, width, height, curvature, segments]);
 
-  // For curved surfaces, we need to offset the mesh so its front face is at z=0
-  const zOffset = useMemo(() => {
-    if (type === 'Cylindrical') {
-        const radius = width / (2 * Math.PI * curvature);
-        return -radius;
-    }
-    if (type === 'Spherical') {
-        const radius = Math.max(width, height) / (Math.PI * curvature);
-        return -radius;
-    }
-    return 0;
-  }, [type, width, height, curvature]);
-
   return (
-    <mesh
+    <group
       position={[position.x, position.y, position.z + zOffset]}
       rotation={[rotation.x, rotation.y, rotation.z]}
-      geometry={geometry}
     >
-      <meshStandardMaterial color="#cccccc" transparent opacity={0.5} side={THREE.DoubleSide} />
-    </mesh>
+      <mesh>
+        <primitive object={geometry} attach="geometry" />
+        <meshStandardMaterial
+          color="#94a3b8"
+          transparent
+          opacity={0.35}
+          side={THREE.DoubleSide}
+          roughness={0.8}
+          metalness={0.1}
+        />
+      </mesh>
+      <mesh>
+        <primitive object={geometry.clone()} attach="geometry" />
+        <meshBasicMaterial
+          color="#64748b"
+          wireframe
+          transparent
+          opacity={0.15}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
   );
 }

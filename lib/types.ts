@@ -64,6 +64,30 @@ export interface EdgeBlendingConfig {
   showRegions: boolean;   // Toggles the visibility of the blend zone visual overlay
 }
 
+export type EdgeBlendPairStatus = 'matched' | 'too_narrow' | 'too_wide';
+
+export interface EdgeBlendPairReport {
+  leftProjectorId: string;
+  leftProjectorName: string;
+  rightProjectorId: string;
+  rightProjectorName: string;
+  desiredOverlapM: number;
+  actualOverlapM: number;   // Never negative; separated images read as 0 overlap
+  deltaM: number;           // Signed distance to correct by; counts any gap between the images
+  featherWidthM: number;
+  status: EdgeBlendPairStatus;
+  recommendation: string;
+}
+
+export interface EdgeBlendReport {
+  ok: boolean;
+  coverageWidthM: number;
+  targetOverlapPercent: number;
+  targetFeatherPercent: number;
+  pairs: EdgeBlendPairReport[];
+  warnings: string[];
+}
+
 /**
  * Defines the shape of the global application state managed by Zustand.
  */
@@ -73,6 +97,7 @@ export interface AppState {
   isLinkedMode: boolean;
   surfaceConfig: SurfaceConfig;
   edgeBlendingConfig: EdgeBlendingConfig;
+  customModelUrl: string | null;
   actions: AppActions;
 }
 
@@ -90,4 +115,5 @@ export interface AppActions {
   setSurfaceConfig: (newConfig: Partial<SurfaceConfig>) => void;
   setEdgeBlendingConfig: (newConfig: Partial<EdgeBlendingConfig>) => void;
   adaptProjectorsToSurface: () => void;
+  setCustomModelUrl: (url: string | null) => void;
 }
