@@ -13,6 +13,7 @@ import { useAppStore } from '@/lib/store';
 
 export default function Home() {
   const selectedProjectorIds = useAppStore((s) => s.selectedProjectorIds);
+  const customModelUrl = useAppStore((s) => s.customModelUrl);
   const actions = useAppStore((s) => s.actions);
 
   const handleResetScene = () => {
@@ -48,7 +49,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         {/* 3D Viewport */}
         <div className="relative flex-1">
-          <SceneErrorBoundary onReset={handleResetScene}>
+          <SceneErrorBoundary onReset={handleResetScene} resetKey={customModelUrl}>
             <ProjectionSystem />
           </SceneErrorBoundary>
           {/* Gradient overlay to blend sidebar edge */}

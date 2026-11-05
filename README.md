@@ -52,9 +52,12 @@ A web application for live event technicians and installation designers to plan 
 - Adjust width, height, curvature, and mesh segment count.
 - Curvature slider appears automatically for non-flat surfaces.
 
-### Model Import (Planned)
+### Model Import and Recovery
 
-- UI scaffolding for loading custom 3D models (.gltf/.glb) as projection surfaces. Not yet fully implemented.
+- Load a local `.gltf`/`.glb` model or the bundled sample cube alongside the projection setup. External companion files for `.gltf` assets are not resolved by the file picker.
+- A malformed model shows a contained scene error. The header **Reset scene**, the fallback **Reset scene**, and **Remove** all recover from that model failure without clearing projector, surface, or edge-blend settings.
+- A healthy model change does not reset the viewport. An unchanged failing asset stays contained rather than retrying in a loop.
+- Scene configuration persists in browser localStorage; imported model URLs do not survive a reload.
 
 ## Tech Stack
 
@@ -100,6 +103,15 @@ npm run build
 npm start
 ```
 
+### Checks
+
+```bash
+npm test
+npx tsc --noEmit
+```
+
+`npm test` runs the edge-blend assertions and the scene-boundary lifecycle self-check using the existing TypeScript/Node toolchain, without a new test framework. The lifecycle check substitutes synchronous `setState`; it is not a substitute for browser/WebGL acceptance. For that check, load the sample, then a malformed local model, recover through each reset/removal control, and load the sample again; projector settings must remain intact.
+
 ### Linting
 
 ```bash
@@ -143,6 +155,5 @@ lib/
 ## Limitations & Roadmap
 
 - `adaptProjectorsToSurface()` is stubbed out -- automatic projector positioning on curved surfaces is not yet implemented.
-- Model import UI exists but does not yet load or render custom 3D models.
-- No test framework is configured.
-- No persistence -- state resets on page reload.
+- Imported models are scene references, not calibrated optical projection surfaces.
+- Automated checks cover edge-blend calculations and error-boundary lifecycle behavior, not physical projector accuracy.

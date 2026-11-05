@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger';
 
 interface Props {
   children: React.ReactNode;
+  /** Retry a failed scene only when its imported model changes or is removed. */
+  resetKey?: string | null;
   /** Called when the user clicks "Reset scene" — should clear transient state
    *  (e.g. a failed custom model) so the next render can succeed. */
   onReset?: () => void;
@@ -35,6 +37,12 @@ export class SceneErrorBoundary extends React.Component<Props, State> {
     logger.error('Scene render error', {
       message: error instanceof Error ? error.message : String(error),
     });
+  }
+
+  componentDidUpdate(previous: Props) {
+    if (this.state.hasError && this.props.resetKey !== previous.resetKey) {
+      this.setState({ hasError: false, message: undefined });
+    }
   }
 
   handleReset = () => {

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "check:edge-blend": "node scripts/check-edge-blend-report.mjs",
-    "test": "npm run check:edge-blend",
+    "check:scene-recovery": "node scripts/check-scene-recovery.mjs",
+    "test": "npm run check:edge-blend && npm run check:scene-recovery",
     "start": "next start",
     "lint": "next lint"
   },
