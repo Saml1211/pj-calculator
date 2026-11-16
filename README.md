@@ -2,6 +2,8 @@
 
 A web application for live event technicians and installation designers to plan multi-projector setups on various surface geometries. Visualize projector placement, throw distances, and edge blending in real-time 3D.
 
+**Use it:** https://saml1211.github.io/pj-calculator/ (works on a phone; settings stay in that browser). Every push to `main` that passes `npm test` redeploys it.
+
 ![Next.js](https://img.shields.io/badge/Next.js-15-black)
 ![React](https://img.shields.io/badge/React-19-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
