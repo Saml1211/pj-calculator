@@ -39,6 +39,14 @@ A web application for live event technicians and installation designers to plan 
 - **Color Picker** -- Per-projector hex color for visual identification.
 - All values can be adjusted via sliders or numeric input fields.
 
+### Locks, Undo and Sharing
+
+- **Locks follow the spec's Table 2.** Distance / width = throw ratio always holds. When a computed value hits its limit, it stays at the limit and the value you edited is solved back, with a message under the controls. Locking Distance disables Width and the other way round; hover a disabled control for the reason.
+- **Aspect ratio presets**: 16:9, 16:10, 4:3, 17:9, 21:9.
+- **Two undo histories**: header **Optics** and **Position** undo/redo separately (a slider drag is one step). Cmd/Ctrl+Z undoes whichever changed last.
+- **Copy link** puts the whole scene in the URL. Opening it in any browser loads that scene; a broken link is refused with a message.
+- `npm test` runs `scripts/check-spec.mjs` (lock rules, invariant over 170 edits, undo rings, link round-trip) with the edge-blend and scene-recovery checks.
+
 ### Edge Blending
 
 - Toggle edge blending on/off.
