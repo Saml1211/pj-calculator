@@ -42,10 +42,12 @@ A web application for live event technicians and installation designers to plan 
 ### Locks, Undo and Sharing
 
 - **Locks follow the spec's Table 2.** Distance / width = throw ratio always holds. When a computed value hits its limit, it stays at the limit and the value you edited is solved back, with a message under the controls. Locking Distance disables Width and the other way round; hover a disabled control for the reason.
+- **Fixed lens**: lock Throw Ratio and Aspect Ratio together (press both lock icons). Distance and width then move together and the lens values refuse edits.
+- **Resets per part**: Optics has **Reset optics**; Layout has **Reset position** (square in front of the surface centre at the current throw), **Reset rotation** and **Reset all**. Each goes into its own undo history.
 - **Aspect ratio presets**: 16:9, 16:10, 4:3, 17:9, 21:9.
 - **Two undo histories**: header **Optics** and **Position** undo/redo separately (a slider drag is one step). Cmd/Ctrl+Z undoes whichever changed last.
 - **Copy link** puts the whole scene in the URL. Opening it in any browser loads that scene; a broken link is refused with a message.
-- `npm test` runs `scripts/check-spec.mjs` (lock rules, invariant over 170 edits, undo rings, link round-trip) with the edge-blend and scene-recovery checks.
+- `npm test` runs `scripts/check-spec.mjs` (lock rules incl. the fixed-lens dual lock, invariant over 204 edits, undo rings, link round-trip) with the edge-blend and scene-recovery checks.
 
 ### Edge Blending
 
@@ -53,6 +55,7 @@ A web application for live event technicians and installation designers to plan 
 - Configure overlap percentage (0 -- 50%).
 - Configure feather percentage (0 -- 100%) for gradient blending.
 - Optionally visualize blend regions in the UI.
+- The blend receipt lists each projector's left and right ramp as a % of its image (the number for its blend menu) and warns where three or more images stack. Weights are normalised so any 2-, 3- or N-way overlap sums to 1 (`npm test` sweeps 2, 3 and 5 projectors).
 
 ### Surface Configuration
 
