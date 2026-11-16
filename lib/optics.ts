@@ -30,8 +30,33 @@ const LABEL: Record<OpticParam, string> = {
 
 const clamp = (v: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, v));
 
+export const FIXED_LENS = 'throwRatio+aspectRatio' as const;
+
+/** True when `param` is held by `lock` (the fixed-lens dual lock holds both ratio and aspect). */
+export function isLocked(param: OpticParam, lock: LockedParameter): boolean {
+  return lock === param || (lock === FIXED_LENS && (param === 'throwRatio' || param === 'aspectRatio'));
+}
+
+/**
+ * The lock after the user presses `param`'s lock icon (spec 6.3). Pressing a free parameter locks it
+ * and frees the previous one, except that throw ratio and aspect ratio combine into the fixed-lens
+ * dual lock. Pressing a locked parameter frees only that one.
+ */
+export function toggleLock(lock: LockedParameter, param: OpticParam): LockedParameter {
+  if (lock === FIXED_LENS) {
+    if (param === 'throwRatio') return 'aspectRatio';
+    if (param === 'aspectRatio') return 'throwRatio';
+    return param;
+  }
+  if (lock === param) return null;
+  const pair = (a: LockedParameter, b: OpticParam) =>
+    (a === 'throwRatio' && b === 'aspectRatio') || (a === 'aspectRatio' && b === 'throwRatio');
+  return pair(lock, param) ? FIXED_LENS : param;
+}
+
 /** Why a control is disabled under the current lock, or null when it is editable. */
 export function disabledReason(param: OpticParam, lock: LockedParameter): string | null {
+  if (lock === FIXED_LENS && isLocked(param, lock)) return `${LABEL[param]} is fixed by the lens lock`;
   if (lock === param) return `${LABEL[param]} is locked`;
   if (param === 'throwDistance' && lock === 'imageWidth') return 'Disabled because Image Width is locked';
   if (param === 'imageWidth' && lock === 'throwDistance') return 'Disabled because Throw Distance is locked';
@@ -42,7 +67,7 @@ type Linear = 'throwDistance' | 'imageWidth' | 'throwRatio';
 
 /** The parameter Table 2 recomputes when `edited` changes under `lock`. */
 function dependentOf(edited: Linear, lock: LockedParameter): Linear {
-  if (lock === 'throwRatio') return edited === 'throwDistance' ? 'imageWidth' : 'throwDistance';
+  if (lock === 'throwRatio' || lock === FIXED_LENS) return edited === 'throwDistance' ? 'imageWidth' : 'throwDistance';
   if (lock === 'throwDistance') return 'imageWidth'; // only throwRatio is editable here
   if (lock === 'imageWidth') return 'throwDistance'; // only throwRatio is editable here
   return edited === 'throwRatio' ? 'throwDistance' : 'throwRatio';
@@ -60,7 +85,7 @@ export function editOptics(params: ProjectionParameters, param: OpticParam, valu
     return { params, error: 'InvalidInput', message: `${LABEL[param]} must be a number` };
   }
   const lock = params.lockedParameter;
-  if (lock === param) {
+  if (isLocked(param, lock)) {
     return { params, error: 'OverConstrained', message: `Cannot edit ${LABEL[param]}: it is locked` };
   }
   const conflict = disabledReason(param, lock);

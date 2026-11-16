@@ -25,7 +25,7 @@ execFileSync(
 );
 
 const require = createRequire(import.meta.url);
-const { calculateEdgeBlendReport } = require(join(outDir, 'calculations.js'));
+const { calculateEdgeBlendReport, blendExtents, blendWeightsAt, smoothstep } = require(join(outDir, 'calculations.js'));
 
 const edgeBlending = { isEnabled: true, overlap: 20, feather: 50, showRegions: true };
 const baseParams = {
@@ -114,4 +114,42 @@ assert.equal(disabled.ok, false);
 assert.equal(disabled.pairs[0].status, 'matched');
 assert.ok(disabled.warnings.some((warning) => warning.includes('disabled')));
 
-console.log('edge blend report check passed');
+// Per-projector blend menu: two 2 m images overlapping 0.4 m, feather 50 % -> 0.2 m ramp = 10 % on the inner edges only.
+const menu = calculateEdgeBlendReport(projectors, edgeBlending).projectorBlends;
+const L = menu.find((b) => b.projectorId === 'left'); const R = menu.find((b) => b.projectorId === 'right');
+assert.equal(L.leftBlendPercent, 0); assert.equal(L.rightBlendPercent, 10); assert.equal(L.rightBlendM, 0.2);
+assert.equal(R.leftBlendPercent, 10); assert.equal(R.rightBlendPercent, 0);
+
+// AC6 / spec 8.4 test 2: in any 2-, 3- or N-way overlap the normalised weights sum to 1.
+assert.equal(smoothstep(0, 1, 0.5), 0.5); assert.equal(smoothstep(1, 1, 0.5), 0); assert.equal(smoothstep(1, 1, 2), 1);
+const EPS = 1e-6;
+const sweep = (list, feather) => {
+  const ex = blendExtents(list, feather);
+  const lo = Math.min(...ex.map((e) => e.left)); const hi = Math.max(...ex.map((e) => e.right));
+  let n = 0;
+  for (let i = 0; i <= 2000; i++) {
+    const x = lo + ((hi - lo) * i) / 2000;
+    const w = blendWeightsAt(x, ex);
+    const covered = ex.some((e) => x >= e.left && x <= e.right);
+    const sum = w.reduce((a, b) => a + b.weight, 0);
+    if (covered) { assert.ok(Math.abs(sum - 1) < EPS, `sum ${sum} at x=${x}`); n++; }
+    assert.ok(w.every((v) => v.weight >= 0 && v.weight <= 1 + EPS));
+  }
+  return { ex, n };
+};
+const three = [at('a', 0), at('b', 0.8), at('c', 1.6)]; // 3-way overlap from 0.6 to 1.0 m
+for (const f of [0, 25, 50, 100]) sweep(three, f);
+const { ex: ex3 } = sweep(three, 50);
+const mid = blendWeightsAt(0.8, ex3); // inside all three images
+assert.ok(mid.every((v) => v.weight > 0), 'all three contribute in the 3-way zone');
+assert.ok(Math.abs(mid.reduce((a, b) => a + b.weight, 0) - 1) < EPS);
+const threeReport = calculateEdgeBlendReport(three, edgeBlending);
+assert.ok(threeReport.warnings.some((w) => w.startsWith('3 images overlap')), '3-way stack is flagged');
+sweep([at('a', 0), at('b', 1.6), at('c', 3.2), at('d', 4.8), at('e', 2.4)], 50); // 5 projectors, uneven stack
+// Outside every image nothing is lit; a single image is at full weight away from its ramps.
+const solo = blendExtents([at('a', 0)], 50);
+assert.equal(blendWeightsAt(5, solo)[0].weight, 0);
+assert.equal(blendWeightsAt(0, solo)[0].weight, 1);
+assert.equal(calculateEdgeBlendReport([at('a', 0), at('b', 1.6)], edgeBlending).warnings.length, 0, 'no stack warning for a clean pair');
+
+console.log('edge blend report check passed (AC6 sums to 1 over 2-, 3- and 5-projector sweeps)');

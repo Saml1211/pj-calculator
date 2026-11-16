@@ -7,7 +7,13 @@
  * Represents the set of parameters that can be locked by the user.
  * Locking a parameter makes it the independent variable in calculations.
  */
-export type LockedParameter = 'throwDistance' | 'imageWidth' | 'throwRatio' | 'aspectRatio' | null;
+export type LockedParameter =
+  | 'throwDistance'
+  | 'imageWidth'
+  | 'throwRatio'
+  | 'aspectRatio'
+  | 'throwRatio+aspectRatio' // fixed lens: the only permitted dual lock (spec 3.3)
+  | null;
 
 /**
  * Defines the geometric and optical properties of a single projector.
@@ -79,8 +85,18 @@ export interface EdgeBlendPairReport {
   recommendation: string;
 }
 
+export interface ProjectorBlend {
+  projectorId: string;
+  projectorName: string;
+  leftBlendM: number;
+  rightBlendM: number;
+  leftBlendPercent: number;  // share of this projector's image width
+  rightBlendPercent: number;
+}
+
 export interface EdgeBlendReport {
   ok: boolean;
+  projectorBlends: ProjectorBlend[];
   coverageWidthM: number;
   targetOverlapPercent: number;
   targetFeatherPercent: number;
@@ -122,6 +138,8 @@ export interface AppActions {
   setCustomModelUrl: (url: string | null) => void;
   setProjectorTransform: (id: string, t: { position?: { x: number; y: number; z: number }; rotation?: { x: number; y: number; z: number } }) => void;
   setLock: (id: string, lock: LockedParameter) => void;
+  /** Granular resets (spec 6.5): each part goes to its own undo ring; 'all' records in both. */
+  resetProjector: (id: string, part: 'position' | 'rotation' | 'optics' | 'all') => void;
   undo: (ring: 'optics' | 'transforms') => void;
   redo: (ring: 'optics' | 'transforms') => void;
   loadScene: (scene: Pick<AppState, 'projectors' | 'surfaceConfig' | 'edgeBlendingConfig'>) => void;

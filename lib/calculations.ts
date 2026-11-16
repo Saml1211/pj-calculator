@@ -202,12 +202,90 @@ export function calculateEdgeBlendReport(
     };
   });
 
+  // What a tech types into each projector's blend menu: the ramp on each edge, as a share of its image.
+  const extentsForBlend = blendExtents(visibleProjectors, edgeBlending.feather);
+  const projectorBlends = extentsForBlend.map((e) => {
+    const width = e.right - e.left;
+    return {
+      projectorId: e.id,
+      projectorName: e.name,
+      leftBlendM: roundMetres(e.rampLeft),
+      rightBlendM: roundMetres(e.rampRight),
+      leftBlendPercent: Math.round((e.rampLeft / width) * 1000) / 10,
+      rightBlendPercent: Math.round((e.rampRight / width) * 1000) / 10,
+    };
+  });
+  // Where three or more images stack, flag it: weights still normalise, but each projector's
+  // own blend menu only has a left and a right ramp, so the stack needs care on site.
+  const edges = extents.flatMap((e) => [e.left, e.right]).sort((a, b) => a - b);
+  for (let i = 0; i < edges.length - 1; i++) {
+    const mid = (edges[i] + edges[i + 1]) / 2;
+    const depth = extents.filter((e) => mid > e.left && mid < e.right).length;
+    if (depth >= 3) {
+      warnings.push(`${depth} images overlap between ${roundMetres(edges[i])} m and ${roundMetres(edges[i + 1])} m; weights are normalised there.`);
+      break;
+    }
+  }
+
   return {
     ok: edgeBlending.isEnabled && pairs.length > 0 && pairs.every((pair) => pair.status === 'matched'),
+    projectorBlends,
     coverageWidthM: roundMetres(coverageWidthM),
     targetOverlapPercent: edgeBlending.overlap,
     targetFeatherPercent: edgeBlending.feather,
     pairs,
     warnings,
   };
+}
+
+/** Hermite smoothstep (spec 3.6 default feather profile); a zero-width ramp is a hard step. */
+export function smoothstep(edge0: number, edge1: number, x: number): number {
+  if (edge1 <= edge0) return x < edge0 ? 0 : 1;
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+interface BlendExtent { id: string; name: string; left: number; right: number; rampLeft: number; rampRight: number }
+
+/**
+ * Each visible projector's image span on the wall (along x) and the width of the feather ramp on
+ * each edge: the deepest overlap with any other image on that side, times the feather percentage.
+ * An edge that overlaps nothing has no ramp, so the outer edges of the wall stay at full brightness.
+ */
+export function blendExtents(projectors: ProjectorConfig[], featherPercent: number): BlendExtent[] {
+  const spans = projectors
+    .filter((p) => p.isVisible)
+    .map((p) => ({ id: p.id, name: p.name, left: p.parameters.position.x - p.parameters.imageWidth / 2, right: p.parameters.position.x + p.parameters.imageWidth / 2 }));
+  const k = Math.min(1, Math.max(0, featherPercent / 100));
+  return spans.map((a) => {
+    const width = a.right - a.left;
+    let leftOverlap = 0;
+    let rightOverlap = 0;
+    for (const b of spans) {
+      if (b === a) continue;
+      // b covers a's left edge from the left, or a's right edge from the right.
+      if (b.left < a.left && b.right > a.left) leftOverlap = Math.max(leftOverlap, Math.min(b.right, a.right) - a.left);
+      if (b.right > a.right && b.left < a.right) rightOverlap = Math.max(rightOverlap, a.right - Math.max(b.left, a.left));
+    }
+    return { ...a, rampLeft: Math.min(width, leftOverlap) * k, rampRight: Math.min(width, rightOverlap) * k };
+  });
+}
+
+/**
+ * Normalised blend weights at wall position `x` (spec 5.4, AC6): each projector's smoothstep ramp,
+ * divided by the sum over every projector lighting that point, so any 2-, 3- or N-way overlap adds up
+ * to exactly 1 and shows no bright band. A point no image reaches returns all zeros.
+ */
+export function blendWeightsAt(x: number, extents: BlendExtent[]): { id: string; weight: number }[] {
+  const raw = extents.map((e) => {
+    if (x < e.left || x > e.right) return 0;
+    return smoothstep(e.left, e.left + e.rampLeft, x) * (1 - smoothstep(e.right - e.rampRight, e.right, x));
+  });
+  let sum = raw.reduce((a, b) => a + b, 0);
+  if (sum === 0) {
+    // Exactly on a ramp's zero end with no other weight: the images that contain x share it evenly.
+    raw.forEach((_, i) => { if (x >= extents[i].left && x <= extents[i].right) raw[i] = 1; });
+    sum = raw.reduce((a, b) => a + b, 0);
+  }
+  return extents.map((e, i) => ({ id: e.id, weight: sum > 0 ? raw[i] / sum : 0 }));
 }

@@ -18,7 +18,7 @@ execFileSync(join(root, 'node_modules/.bin/tsc'), [
   '--esModuleInterop', '--skipLibCheck', '--noEmit', 'false', '--outDir', outDir,
 ], { cwd: root, stdio: 'inherit' });
 const require = createRequire(import.meta.url);
-const { editOptics, disabledReason, OPTIC_RANGES } = require(join(outDir, 'optics.js'));
+const { editOptics, disabledReason, OPTIC_RANGES, toggleLock, isLocked } = require(join(outDir, 'optics.js'));
 const history = require(join(outDir, 'history.js'));
 const { encodeScene, decodeScene } = require(join(outDir, 'scene-link.js'));
 
@@ -59,7 +59,7 @@ r = editOptics(base(null), 'throwDistance', Number.NaN);
 assert.equal(r.error, 'InvalidInput'); assert.equal(r.params.throwDistance, 5);
 
 // AC1 + AC2 + idempotency over a grid of edits and locks.
-const locks = [null, 'throwDistance', 'imageWidth', 'throwRatio', 'aspectRatio'];
+const locks = [null, 'throwDistance', 'imageWidth', 'throwRatio', 'aspectRatio', 'throwRatio+aspectRatio'];
 const edits = { throwDistance: [0.1, 0.3, 1, 7.3, 20, 40], imageWidth: [0.2, 0.5, 1.7, 10, 11], throwRatio: [0.1, 0.3, 0.8, 4.4, 7.5, 9] };
 let cases = 0;
 for (const lock of locks) for (const [param, values] of Object.entries(edits)) for (const v of values) {
@@ -78,6 +78,32 @@ assert.match(disabledReason('throwDistance', 'imageWidth'), /Image Width is lock
 assert.match(disabledReason('imageWidth', 'throwDistance'), /Throw Distance is locked/);
 assert.equal(disabledReason('throwDistance', 'throwRatio'), null);
 assert.match(disabledReason('throwRatio', 'throwRatio'), /locked/);
+
+// Fixed-lens dual lock (spec 3.3, Table 2 last four rows).
+const FL = 'throwRatio+aspectRatio';
+r = editOptics(base(FL), 'imageWidth', 3);
+assert.equal(r.error, undefined); assert.ok(Math.abs(r.params.throwDistance - 7.5) < EPS);
+r = editOptics(base(FL), 'throwDistance', 6);
+assert.equal(r.error, undefined); assert.ok(Math.abs(r.params.imageWidth - 2.4) < EPS);
+r = editOptics(base(FL), 'throwRatio', 2);
+assert.equal(r.error, 'OverConstrained'); assert.equal(r.params.throwRatio, 2.5);
+r = editOptics(base(FL), 'aspectRatio', 4 / 3);
+assert.equal(r.error, 'OverConstrained'); assert.equal(r.params.aspectRatio, 16 / 9);
+assert.match(disabledReason('aspectRatio', FL), /fixed by the lens lock/);
+assert.match(disabledReason('throwRatio', FL), /fixed by the lens lock/);
+assert.equal(disabledReason('imageWidth', FL), null);
+assert.equal(disabledReason('throwDistance', FL), null);
+assert.ok(isLocked('aspectRatio', FL) && isLocked('throwRatio', FL) && !isLocked('imageWidth', FL));
+// 6.3: pressing a lock icon. One lock at a time, except ratio + aspect, which combine.
+assert.equal(toggleLock(null, 'throwRatio'), 'throwRatio');
+assert.equal(toggleLock('throwRatio', 'throwRatio'), null);
+assert.equal(toggleLock('throwRatio', 'imageWidth'), 'imageWidth');
+assert.equal(toggleLock('throwDistance', 'imageWidth'), 'imageWidth', 'distance and width never both lock');
+assert.equal(toggleLock('throwRatio', 'aspectRatio'), FL);
+assert.equal(toggleLock('aspectRatio', 'throwRatio'), FL);
+assert.equal(toggleLock(FL, 'aspectRatio'), 'throwRatio');
+assert.equal(toggleLock(FL, 'throwRatio'), 'aspectRatio');
+assert.equal(toggleLock(FL, 'throwDistance'), 'throwDistance');
 
 // AC5: separate undo rings (spec 8.3 scenario 2).
 let h = history.emptyHistory();

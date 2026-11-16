@@ -13,7 +13,7 @@ export interface SharedScene {
 }
 
 const MAX_HASH = 16_000;
-const LOCKS: LockedParameter[] = ['throwDistance', 'imageWidth', 'throwRatio', 'aspectRatio', null];
+const LOCKS: LockedParameter[] = ['throwDistance', 'imageWidth', 'throwRatio', 'aspectRatio', 'throwRatio+aspectRatio', null];
 const SURFACES = ['Flat', 'Cylindrical', 'Spherical'] as const;
 
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {

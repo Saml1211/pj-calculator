@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppState, ProjectorConfig, ProjectionParameters } from './types';
-import { adaptProjectorsToSurface } from './calculations';
+import { adaptProjectorsToSurface, calculateProjectorWrapAround } from './calculations';
 import { editOptics, type OpticParam } from './optics';
 import { emptyHistory, record, undo as undoRing, redo as redoRing, type Ring } from './history';
 import { v4 as uuidv4 } from 'uuid';
@@ -114,6 +114,30 @@ export const useAppStore = create<AppState>()(
           p.id === id ? { ...p, parameters: { ...p.parameters, lockedParameter: lock } } : p
         );
         return { projectors, opticsMessage: null, history: record(state.history, 'optics', state, { ...state, projectors }, Date.now()) };
+      }),
+    resetProjector: (id, part) =>
+      set((state) => {
+        const optics = part === 'optics' || part === 'all';
+        const position = part === 'position' || part === 'all';
+        const rotation = part === 'rotation' || part === 'all';
+        const projectors = state.projectors.map((p) => {
+          if (p.id !== id) return p;
+          const { position: pos, rotation: rot, ...lens } = initialProjectorParams;
+          let next = optics ? { ...p.parameters, ...lens } : { ...p.parameters };
+          // Position resets to square in front of the surface centre at this lens's throw distance,
+          // not the spec's (0,0,0), which would sit the projector inside the screen.
+          if (position) {
+            const home = calculateProjectorWrapAround(state.surfaceConfig, next, 0).position;
+            next = { ...next, position: { x: home.x, y: home.y, z: home.z } };
+          }
+          if (rotation) next = { ...next, rotation: { ...rot } };
+          return { ...p, parameters: next };
+        });
+        const after = { ...state, projectors };
+        let history = state.history;
+        if (optics) history = record(history, 'optics', state, after, Date.now());
+        if (position || rotation) history = record(history, 'transforms', state, after, Date.now());
+        return { projectors, history, opticsMessage: null };
       }),
     setProjectorTransform: (id, t) =>
       set((state) => {
