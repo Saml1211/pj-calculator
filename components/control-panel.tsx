@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Lock, Unlock } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import type { LockedParameter, ProjectionParameters } from '@/lib/types';
+import { disabledReason, type OpticParam } from '@/lib/optics';
 
 interface ParameterControlProps {
   label: string;
@@ -38,9 +39,10 @@ function ParameterControl({
   onLockChange,
 }: ParameterControlProps) {
   const isLocked = lockedParameter === param;
+  const reason = disabledReason(param as OpticParam, lockedParameter);
 
   return (
-    <div className={cn('space-y-2', isLocked && 'opacity-50')}>
+    <div className={cn('space-y-2', reason && 'opacity-50')} title={reason ?? undefined}>
       <div className="flex items-center justify-between">
         <Label className="text-xs">{label}</Label>
         <Button
@@ -48,6 +50,8 @@ function ParameterControl({
           size="icon"
           className="h-6 w-6"
           onClick={() => onLockChange(isLocked ? null : (param as LockedParameter))}
+          aria-label={isLocked ? `Unlock ${label}` : `Lock ${label}`}
+          aria-pressed={isLocked}
         >
           {isLocked ? (
             <Lock className="h-3.5 w-3.5 text-primary" />
@@ -62,7 +66,7 @@ function ParameterControl({
           min={min}
           max={max}
           step={step}
-          disabled={isLocked}
+          disabled={reason !== null}
           onValueChange={([v]) => onValueChange(param, v)}
           className="flex-1"
         />
@@ -72,7 +76,8 @@ function ParameterControl({
           min={min}
           max={max}
           step={step}
-          disabled={isLocked}
+          disabled={reason !== null}
+          aria-label={label}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
             if (!isNaN(v)) onValueChange(param, v);
@@ -87,6 +92,14 @@ function ParameterControl({
   );
 }
 
+const ASPECTS = [
+  { label: '16:9', value: 16 / 9 },
+  { label: '16:10', value: 16 / 10 },
+  { label: '4:3', value: 4 / 3 },
+  { label: '17:9', value: 17 / 9 },
+  { label: '21:9', value: 21 / 9 },
+];
+
 function radToDeg(rad: number): number {
   return (rad * 180) / Math.PI;
 }
@@ -98,6 +111,7 @@ function degToRad(deg: number): number {
 export function ControlPanel() {
   const projectors = useAppStore((s) => s.projectors);
   const selectedProjectorIds = useAppStore((s) => s.selectedProjectorIds);
+  const opticsMessage = useAppStore((s) => s.opticsMessage);
   const actions = useAppStore((s) => s.actions);
 
   const selectedProjector = projectors.find(
@@ -125,11 +139,7 @@ export function ControlPanel() {
     actions.updateProjectorParameter(selectedProjector.id, param, value);
   };
 
-  const updateLock = (param: LockedParameter) => {
-    actions.updateProjector(selectedProjector.id, {
-      parameters: { ...params, lockedParameter: param },
-    });
-  };
+  const updateLock = (param: LockedParameter) => actions.setLock(selectedProjector.id, param);
 
   return (
     <Card>
@@ -191,9 +201,33 @@ export function ControlPanel() {
               onValueChange={updateParam}
               onLockChange={updateLock}
             />
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs" htmlFor="aspect-ratio">Aspect Ratio</Label>
+              <select
+                id="aspect-ratio"
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                value={ASPECTS.find((a) => Math.abs(a.value - params.aspectRatio) < 1e-3)?.label ?? 'custom'}
+                onChange={(e) => {
+                  const a = ASPECTS.find((x) => x.label === e.target.value);
+                  if (a) updateParam('aspectRatio', a.value);
+                }}
+              >
+                {ASPECTS.map((a) => (
+                  <option key={a.label} value={a.label}>{a.label}</option>
+                ))}
+                {!ASPECTS.some((a) => Math.abs(a.value - params.aspectRatio) < 1e-3) && (
+                  <option value="custom">{params.aspectRatio.toFixed(2)}:1</option>
+                )}
+              </select>
+            </div>
             <div className="text-xs text-muted-foreground pt-1">
               Image Height: {params.imageHeight.toFixed(2)} m
             </div>
+            {opticsMessage && (
+              <p role="status" className="text-xs text-amber-500">
+                {opticsMessage}
+              </p>
+            )}
           </TabsContent>
 
           <TabsContent value="layout" className="space-y-4 mt-4">
@@ -208,15 +242,13 @@ export function ControlPanel() {
                     <Input
                       type="number"
                       step={0.1}
+                      aria-label={`Position ${axis.toUpperCase()}`}
                       value={Number(params.position[axis].toFixed(2))}
                       onChange={(e) => {
                         const v = parseFloat(e.target.value);
                         if (!isNaN(v)) {
-                          actions.updateProjector(selectedProjector.id, {
-                            parameters: {
-                              ...params,
-                              position: { ...params.position, [axis]: v },
-                            },
+                          actions.setProjectorTransform(selectedProjector.id, {
+                            position: { ...params.position, [axis]: v },
                           });
                         }
                       }}
@@ -237,20 +269,15 @@ export function ControlPanel() {
                     <Input
                       type="number"
                       step={1}
+                      aria-label={`Rotation ${axis.toUpperCase()}`}
                       value={Number(
                         radToDeg(params.rotation[axis]).toFixed(1)
                       )}
                       onChange={(e) => {
                         const v = parseFloat(e.target.value);
                         if (!isNaN(v)) {
-                          actions.updateProjector(selectedProjector.id, {
-                            parameters: {
-                              ...params,
-                              rotation: {
-                                ...params.rotation,
-                                [axis]: degToRad(v),
-                              },
-                            },
+                          actions.setProjectorTransform(selectedProjector.id, {
+                            rotation: { ...params.rotation, [axis]: degToRad(v) },
                           });
                         }
                       }}

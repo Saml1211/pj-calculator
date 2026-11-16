@@ -7,6 +7,7 @@ import { SurfaceManager } from '@/components/surface-manager';
 import { EdgeBlendingControls } from '@/components/edge-blending-controls';
 import { ModelImport } from '@/components/model-import';
 import { SceneErrorBoundary } from '@/components/scene-error-boundary';
+import { SceneActions } from '@/components/scene-actions';
 import { Button } from '@/components/ui/button';
 import { Monitor, RotateCcw } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
@@ -43,6 +44,7 @@ export default function Home() {
           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
           Reset scene
         </Button>
+        <SceneActions />
       </header>
 
       {/* Main content */}

@@ -98,6 +98,10 @@ export interface AppState {
   surfaceConfig: SurfaceConfig;
   edgeBlendingConfig: EdgeBlendingConfig;
   customModelUrl: string | null;
+  /** Two separate undo rings (optics, transforms); not persisted. */
+  history: import('./history').History;
+  /** Last clamp or refusal from an optics edit, shown under the optics controls. */
+  opticsMessage: string | null;
   actions: AppActions;
 }
 
@@ -116,4 +120,9 @@ export interface AppActions {
   setEdgeBlendingConfig: (newConfig: Partial<EdgeBlendingConfig>) => void;
   adaptProjectorsToSurface: () => void;
   setCustomModelUrl: (url: string | null) => void;
+  setProjectorTransform: (id: string, t: { position?: { x: number; y: number; z: number }; rotation?: { x: number; y: number; z: number } }) => void;
+  setLock: (id: string, lock: LockedParameter) => void;
+  undo: (ring: 'optics' | 'transforms') => void;
+  redo: (ring: 'optics' | 'transforms') => void;
+  loadScene: (scene: Pick<AppState, 'projectors' | 'surfaceConfig' | 'edgeBlendingConfig'>) => void;
 }

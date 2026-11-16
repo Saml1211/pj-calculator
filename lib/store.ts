@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { AppState, ProjectorConfig, ProjectionParameters } from './types';
-import { calculateLinkedParameters, adaptProjectorsToSurface } from './calculations';
+import { adaptProjectorsToSurface } from './calculations';
+import { editOptics, type OpticParam } from './optics';
+import { emptyHistory, record, undo as undoRing, redo as redoRing, type Ring } from './history';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
 
@@ -43,6 +45,8 @@ export const useAppStore = create<AppState>()(
   selectedProjectorIds: [],
   isLinkedMode: false,
   customModelUrl: null,
+  history: emptyHistory(),
+  opticsMessage: null,
   surfaceConfig: {
     type: 'Flat',
     width: 5,
@@ -81,27 +85,64 @@ export const useAppStore = create<AppState>()(
           p.id === id ? { ...p, ...newConfig } : p
         ),
       })),
-    updateProjectorParameter: (id, param, value) =>
+    updateProjectorParameter: (id, param, value) => {
+      if (!['throwDistance', 'imageWidth', 'throwRatio', 'aspectRatio'].includes(param)) return;
+      const state = get();
+      const primary = state.projectors.find((p) => p.id === id);
+      if (!primary) return;
+      const optic = param as OpticParam;
+      const first = editOptics(primary.parameters, optic, value);
+      // Linked mode (spec 3.5): the other selected projectors get the same change as a
+      // delta, each through its own lock. Their transforms are never touched.
+      const delta = first.params[optic] - primary.parameters[optic];
+      const linked = state.isLinkedMode && state.selectedProjectorIds.includes(id);
+      const projectors = state.projectors.map((p) => {
+        if (p.id === id) return { ...p, parameters: first.params };
+        if (!linked || !state.selectedProjectorIds.includes(p.id) || delta === 0) return p;
+        return { ...p, parameters: editOptics(p.parameters, optic, p.parameters[optic] + delta).params };
+      });
+      const after = { ...state, projectors };
+      set({
+        projectors,
+        opticsMessage: first.message ?? null,
+        history: record(state.history, 'optics', state, after, Date.now(), `${id}:${param}`),
+      });
+    },
+    setLock: (id, lock) =>
       set((state) => {
-        const targetProjectors = state.isLinkedMode ? state.projectors.filter(p => state.selectedProjectorIds.includes(p.id)) : state.projectors.filter(p => p.id === id);
-        const updatedProjectors = [...state.projectors];
-
-        targetProjectors.forEach(proj => {
-            const newParams = calculateLinkedParameters(proj.parameters, param, value);
-            const projIndex = updatedProjectors.findIndex(p => p.id === proj.id);
-            if (projIndex !== -1) {
-                updatedProjectors[projIndex] = { ...updatedProjectors[projIndex], parameters: newParams };
-            }
-        });
-
-        return { projectors: updatedProjectors };
+        const projectors = state.projectors.map((p) =>
+          p.id === id ? { ...p, parameters: { ...p.parameters, lockedParameter: lock } } : p
+        );
+        return { projectors, opticsMessage: null, history: record(state.history, 'optics', state, { ...state, projectors }, Date.now()) };
       }),
+    setProjectorTransform: (id, t) =>
+      set((state) => {
+        const projectors = state.projectors.map((p) =>
+          p.id === id ? { ...p, parameters: { ...p.parameters, ...t } } : p
+        );
+        const key = `${id}:${Object.keys(t).join()}`;
+        return { projectors, history: record(state.history, 'transforms', state, { ...state, projectors }, Date.now(), key) };
+      }),
+    undo: (ring: Ring) =>
+      set((state) => {
+        const r = undoRing(state.history, ring, state);
+        return { history: r.history, projectors: r.scene.projectors, surfaceConfig: r.scene.surfaceConfig, opticsMessage: null };
+      }),
+    redo: (ring: Ring) =>
+      set((state) => {
+        const r = redoRing(state.history, ring, state);
+        return { history: r.history, projectors: r.scene.projectors, surfaceConfig: r.scene.surfaceConfig, opticsMessage: null };
+      }),
+    loadScene: (scene) =>
+      set({ ...scene, selectedProjectorIds: [], history: emptyHistory(), opticsMessage: null }),
     setSelectedProjectorIds: (ids) => set({ selectedProjectorIds: ids }),
     toggleLinkedMode: () => set((state) => ({ isLinkedMode: !state.isLinkedMode })),
     setSurfaceConfig: (newConfig) =>
-      set((state) => ({
-        surfaceConfig: { ...state.surfaceConfig, ...newConfig },
-      })),
+      set((state) => {
+        const surfaceConfig = { ...state.surfaceConfig, ...newConfig };
+        const key = `surface:${Object.keys(newConfig).join()}`;
+        return { surfaceConfig, history: record(state.history, 'transforms', state, { ...state, surfaceConfig }, Date.now(), key) };
+      }),
     setEdgeBlendingConfig: (newConfig) =>
       set((state) => ({
         edgeBlendingConfig: { ...state.edgeBlendingConfig, ...newConfig },
@@ -113,7 +154,8 @@ export const useAppStore = create<AppState>()(
         projectorCount: projectors.length,
       });
       const updated = adaptProjectorsToSurface(surfaceConfig, projectors);
-      set({ projectors: updated });
+      const state = get();
+      set({ projectors: updated, history: record(state.history, 'transforms', state, { ...state, projectors: updated }, Date.now()) });
     },
     setCustomModelUrl: (url) => set({ customModelUrl: url }),
   },
