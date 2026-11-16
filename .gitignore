@@ -24,4 +24,4 @@ node_modules/
 
 # Project-specific ignores
 .gemini/
-versions/.gemini/
+versions/.gemini/out/
