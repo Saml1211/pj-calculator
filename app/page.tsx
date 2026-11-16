@@ -24,11 +24,11 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex min-h-screen flex-col md:h-screen md:overflow-hidden">
       {/* Header */}
-      <header className="flex h-12 shrink-0 items-center border-b border-border px-4">
+      <header className="flex shrink-0 flex-wrap items-center gap-y-1 border-b border-border px-4 py-2 md:h-12 md:flex-nowrap md:py-0">
         <Monitor className="mr-2 h-5 w-5 text-primary" />
-        <h1 className="text-sm font-semibold tracking-tight">Projector Calculator</h1>
+        <h1 className="whitespace-nowrap text-sm font-semibold tracking-tight">Projector Calculator</h1>
         <span className="ml-auto text-xs text-muted-foreground">
           {selectedProjectorIds.length > 0
             ? `${selectedProjectorIds.length} selected`
@@ -48,19 +48,19 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row md:overflow-hidden">
         {/* 3D Viewport */}
-        <div className="relative flex-1">
+        <div className="relative h-[55vh] shrink-0 md:h-auto md:flex-1 md:shrink">
           <SceneErrorBoundary onReset={handleResetScene} resetKey={customModelUrl}>
             <ProjectionSystem />
           </SceneErrorBoundary>
           {/* Gradient overlay to blend sidebar edge */}
-          <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent" />
+          <div className="pointer-events-none absolute right-0 hidden md:block top-0 h-full w-8 bg-gradient-to-l from-background to-transparent" />
         </div>
 
         {/* Sidebar */}
-        <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card/50">
-          <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        <aside className="flex w-full flex-col border-t border-border bg-card/50 md:w-80 md:shrink-0 md:border-l md:border-t-0">
+          <div className="space-y-3 p-3 md:flex-1 md:overflow-y-auto">
             <ProjectorManager />
             <ControlPanel />
             <SurfaceManager />
