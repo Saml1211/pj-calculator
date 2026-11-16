@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Lock, Unlock } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import type { LockedParameter, ProjectionParameters } from '@/lib/types';
-import { disabledReason, type OpticParam } from '@/lib/optics';
+import { disabledReason, isLocked as lockHolds, toggleLock, FIXED_LENS, type OpticParam } from '@/lib/optics';
 
 interface ParameterControlProps {
   label: string;
@@ -23,7 +23,7 @@ interface ParameterControlProps {
   unit?: string;
   lockedParameter: LockedParameter;
   onValueChange: (param: keyof ProjectionParameters, value: number) => void;
-  onLockChange: (param: LockedParameter) => void;
+  onLockChange: (param: OpticParam) => void;
 }
 
 function ParameterControl({
@@ -38,7 +38,7 @@ function ParameterControl({
   onValueChange,
   onLockChange,
 }: ParameterControlProps) {
-  const isLocked = lockedParameter === param;
+  const isLocked = lockHolds(param as OpticParam, lockedParameter);
   const reason = disabledReason(param as OpticParam, lockedParameter);
 
   return (
@@ -49,7 +49,7 @@ function ParameterControl({
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={() => onLockChange(isLocked ? null : (param as LockedParameter))}
+          onClick={() => onLockChange(param as OpticParam)}
           aria-label={isLocked ? `Unlock ${label}` : `Lock ${label}`}
           aria-pressed={isLocked}
         >
@@ -139,7 +139,9 @@ export function ControlPanel() {
     actions.updateProjectorParameter(selectedProjector.id, param, value);
   };
 
-  const updateLock = (param: LockedParameter) => actions.setLock(selectedProjector.id, param);
+  const updateLock = (param: OpticParam) =>
+    actions.setLock(selectedProjector.id, toggleLock(params.lockedParameter, param));
+  const aspectLocked = lockHolds('aspectRatio', params.lockedParameter);
 
   return (
     <Card>
@@ -202,9 +204,23 @@ export function ControlPanel() {
               onLockChange={updateLock}
             />
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-xs" htmlFor="aspect-ratio">Aspect Ratio</Label>
+              <div className="flex items-center gap-1">
+                <Label className="text-xs" htmlFor="aspect-ratio">Aspect Ratio</Label>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => updateLock('aspectRatio')}
+                  aria-label={aspectLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'}
+                  aria-pressed={aspectLocked}
+                >
+                  {aspectLocked ? <Lock className="h-3.5 w-3.5 text-primary" /> : <Unlock className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
               <select
                 id="aspect-ratio"
+                disabled={aspectLocked}
+                title={disabledReason('aspectRatio', params.lockedParameter) ?? undefined}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                 value={ASPECTS.find((a) => Math.abs(a.value - params.aspectRatio) < 1e-3)?.label ?? 'custom'}
                 onChange={(e) => {
@@ -223,6 +239,14 @@ export function ControlPanel() {
             <div className="text-xs text-muted-foreground pt-1">
               Image Height: {params.imageHeight.toFixed(2)} m
             </div>
+            {params.lockedParameter === FIXED_LENS && (
+              <p className="text-xs text-muted-foreground">
+                Fixed lens: throw ratio and aspect are held; distance and width move together.
+              </p>
+            )}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => actions.resetProjector(selectedProjector.id, 'optics')}>
+              Reset optics
+            </Button>
             {opticsMessage && (
               <p role="status" className="text-xs text-amber-500">
                 {opticsMessage}
@@ -286,6 +310,17 @@ export function ControlPanel() {
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => actions.resetProjector(selectedProjector.id, 'position')}>
+                Reset position
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => actions.resetProjector(selectedProjector.id, 'rotation')}>
+                Reset rotation
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => actions.resetProjector(selectedProjector.id, 'all')}>
+                Reset all
+              </Button>
             </div>
           </TabsContent>
 

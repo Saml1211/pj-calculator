@@ -132,6 +132,16 @@ export function EdgeBlendingControls() {
                     <div className="mt-1 text-muted-foreground">{pair.recommendation}</div>
                   </div>
                 ))}
+                {report.projectorBlends.length > 1 && (
+                  <div className="rounded bg-muted/40 p-2">
+                    <div className="font-medium">Blend menu per projector (ramp, % of image)</div>
+                    {report.projectorBlends.map((b) => (
+                      <div key={b.projectorId} className="text-muted-foreground">
+                        {b.projectorName}: left {b.leftBlendPercent.toFixed(1)}% ({b.leftBlendM.toFixed(2)} m) · right {b.rightBlendPercent.toFixed(1)}% ({b.rightBlendM.toFixed(2)} m)
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {report.warnings.map((warning) => (
                   <div key={warning} className="text-muted-foreground">{warning}</div>
                 ))}
